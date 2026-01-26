@@ -3,6 +3,23 @@ import yfinance as yf
 import pandas as pd
 import requests
 import plotly.graph_objects as go
+from supabase import create_client, Client
+
+# =========================================================
+# 🔐 CONFIGURATION SUPABASE (AUTH)
+# =========================================================
+# On utilise st.cache_resource pour ne pas reconnecter à chaque clic
+@st.cache_resource
+def init_connection():
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
+
+supabase = init_connection()
+
+# Gestion de la session utilisateur
+if 'user' not in st.session_state:
+    st.session_state.user = None
 
 # =========================================================
 # 🎨 CONFIGURATION & DESIGN SYSTEM (DARK LUXURY)
@@ -404,6 +421,45 @@ def kpi_card(label, value_str, target_text, is_success, help_text, goal_label="G
 # =========================================================
 with st.sidebar:
     st.markdown("### ⚖️ MIZAN INVESTMENTS")
+    
+    # --- DEBUT BLOC AUTHENTIFICATION ---
+    if st.session_state.user is None:
+        auth_mode = st.tabs(["Login", "Sign Up"])
+        
+        # Onglet Connexion
+        with auth_mode[0]:
+            email_login = st.text_input("Email", key="login_email")
+            password_login = st.text_input("Password", type="password", key="login_pass")
+            if st.button("Se connecter", type="primary"):
+                try:
+                    response = supabase.auth.sign_in_with_password({"email": email_login, "password": password_login})
+                    st.session_state.user = response.user
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur : {e}")
+
+        # Onglet Inscription
+        with auth_mode[1]:
+            email_signup = st.text_input("Email", key="signup_email")
+            password_signup = st.text_input("Password", type="password", key="signup_pass")
+            if st.button("Créer un compte"):
+                try:
+                    response = supabase.auth.sign_up({"email": email_signup, "password": password_signup})
+                    st.success("Compte créé ! Vérifiez vos emails ou connectez-vous.")
+                except Exception as e:
+                    st.error(f"Erreur : {e}")
+    
+    else:
+        # Si connecté
+        st.success(f"👋 {st.session_state.user.email}")
+        if st.button("Se déconnecter"):
+            supabase.auth.sign_out()
+            st.session_state.user = None
+            st.rerun()
+    
+    st.markdown("---")
+    # --- FIN BLOC AUTHENTIFICATION ---
+
     lang_choice = st.selectbox("Language", ["English", "Français"], key="lang", label_visibility="collapsed")
     lang = 'en' if lang_choice == "English" else 'fr'
     t = TRANSLATIONS[lang]
